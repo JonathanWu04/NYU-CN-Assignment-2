@@ -36,7 +36,8 @@ def main():
 
         TOTAL_ROUNDS = 100
         # mapping: server -> our winning move
-        wins = {'P': 'S', 'S': 'R', 'R': 'P'}
+        # Optimization: operate on raw bytes and send single-byte replies
+        wins_int = {ord('P'): b'S', ord('S'): b'R', ord('R'): b'P'}
         rounds = 0
 
         ## After you have sent your studentID and the authentication is passed 
@@ -50,8 +51,7 @@ def main():
         ## 2) If you lose any round in the middle, the server will shutdown the socket, too 
 
         # Automatic play loop: read server move and reply with the winning move
-        # Optimization: operate on raw bytes and send single-byte replies
-        wins_int = {ord('P'): b'S', ord('S'): b'R', ord('R'): b'P'}
+
         sock = client_socket
         local_send = sock.send
         local_recv = sock.recv

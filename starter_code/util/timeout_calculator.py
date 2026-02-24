@@ -43,19 +43,26 @@ class TimeoutCalculator:
 
     @staticmethod
     def __compute_new_mean_estimate(old_mean: float, latest_rtt: float, alpha: float) -> float:
-        # TODO: Implement this function to compute the new mean using an EWMA-based estimation algorithm
-        return 0.0
+        # EWMA: EstimatedRTT = (1 - alpha) * EstimatedRTT + alpha * SampleRTT
+        return (1.0 - float(alpha)) * float(old_mean) + float(alpha) * float(latest_rtt)
 
     @staticmethod
     def __compute_new_stddiv_estimate(old_stddiv: float, mean: float, latest_rtt: float, beta: float) -> float:
-        # TODO: Implement this function to compute the new stddiv using an EWMA-based estimation algorithm
-        return 0.0
+        # EWMA for deviation: DevRTT = (1 - beta) * DevRTT + beta * |SampleRTT - EstimatedRTT|
+        return (1.0 - float(beta)) * float(old_stddiv) + float(beta) * abs(float(latest_rtt) - float(mean))
 
 
     @staticmethod
     def __compute_timeout(mean: float, stddiv: float, k: float, bounds: TimeoutBounds) -> float:
-        # TODO: Use the mean and stddiv to compute the timeout. Then, if needed, trim to the min and max in self.bounds
-        return 0.0
+        # TimeoutInterval = EstimatedRTT + k * DevRTT
+        timeout = float(mean) + float(k) * float(stddiv)
+        # Apply bounds trimming if bounds provided
+        if bounds is not None:
+            if bounds.min is not None and timeout < float(bounds.min):
+                timeout = float(bounds.min)
+            if bounds.max is not None and timeout > float(bounds.max):
+                timeout = float(bounds.max)
+        return timeout
 
     """
     Return the most up-to-date mean estimate
