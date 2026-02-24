@@ -26,12 +26,20 @@ def main():
         student_id = input("Enter your student ID: ")
         client_socket.send(student_id.encode('utf-8'))
         print(f"Sent: {student_id}")
+        # Configure socket for low-latency automatic play
+        client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # Use blocking mode (no timeout) to avoid accidental timeouts
+        client_socket.settimeout(None)
 
         # Play exactly 100 rounds (automatic mode)
         print("\n🤖 Playing...\n")
 
         TOTAL_ROUNDS = 100
-        ## TODO: After you have sent your studentID and the authentication is passed 
+        # mapping: server -> our winning move
+        wins = {'P': 'S', 'S': 'R', 'R': 'P'}
+        rounds = 0
+
+        ## After you have sent your studentID and the authentication is passed 
         ## Then you will start playing the game for 100 rounds: 
         ## For every round, the server will send a letter: P|S|R
         ## You should reply a letter to win each round
@@ -40,6 +48,29 @@ def main():
         ## otherwise, the server will shut down the connection. 
         ## That means, you cannot manually type the answer as previous game
         ## 2) If you lose any round in the middle, the server will shutdown the socket, too 
+
+        # Automatic play loop: read server move and reply with the winning move
+        # Optimization: operate on raw bytes and send single-byte replies
+        wins_int = {ord('P'): b'S', ord('S'): b'R', ord('R'): b'P'}
+        sock = client_socket
+        local_send = sock.send
+        local_recv = sock.recv
+        while rounds < TOTAL_ROUNDS:
+            data = local_recv(1024)
+            if not data:
+                print("Server closed connection during game")
+                return
+            # iterate over received bytes and respond immediately for each move
+            for byte in data:
+                if byte in wins_int:
+                    try:
+                        local_send(wins_int[byte])
+                    except BrokenPipeError:
+                        print("Server closed connection during game")
+                        return
+                    rounds += 1
+                    if rounds >= TOTAL_ROUNDS:
+                        break
 
         # After 100 rounds, receive final victory message
         final_message = client_socket.recv(1024).decode('utf-8')
