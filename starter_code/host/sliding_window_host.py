@@ -42,7 +42,16 @@ class SlidingWindowHost(Host, ABC):
         # REPLACE pass with your code
         packets_received = self.network_interface.receive_all()
         for packet in packets_received:
-            pass 
+            # Only process ACKs
+            if not packet.ack_flag:
+                continue
+
+            # Compute RTT sample and update timeout estimator
+            rtt = current_time - packet.sent_timestamp
+            self.timeout_calculator.add_data_point(rtt)
+
+            # Remove inflight information for this sequence number
+            self.sliding_window.remove_inflight_information(packet.sequence_number)
 
 
         # TODO: STEP 2 - Retry any messages that have timed out
@@ -57,7 +66,15 @@ class SlidingWindowHost(Host, ABC):
         # REPLACE pass with your code 
         retriable_packets = self.sliding_window.get_packets_to_retry()
         for retriable_message in retriable_packets:
-            pass 
+            seq = retriable_message.sequence_number
+            # Retransmit packet with same sequence number
+            retransmit_pkt = Packet(sent_timestamp=current_time, sequence_number=seq, retransmission_flag=True)
+            self.network_interface.transmit(retransmit_pkt)
+            # Update inflight info with new timeout
+            # Remove old entry and add updated one
+            self.sliding_window.remove_inflight_information(seq)
+            new_timeout = current_time + self.timeout_calculator.timeout()
+            self.sliding_window.add_inflight_information(seq, new_timeout)
 
         # TODO: STEP 3 - Transmit new messages
         #  - When you transmit each packet (in steps 2 and 3), you should track that message as inflight
@@ -68,7 +85,11 @@ class SlidingWindowHost(Host, ABC):
         #      - Use the transmit() function of the network interface to send the packet
         # REPLACE pass with your code 
         for i in range(0, self.sliding_window.compute_number_of_packets_to_send()):
-            pass
+            seq = self.advance_sequence_number()
+            pkt = Packet(sent_timestamp=current_time, sequence_number=seq, retransmission_flag=False)
+            self.network_interface.transmit(pkt)
+            timeout = current_time + self.timeout_calculator.timeout()
+            self.sliding_window.add_inflight_information(seq, timeout)
 
         # STEP 4 - Return
         #  - Return the largest in-order sequence number

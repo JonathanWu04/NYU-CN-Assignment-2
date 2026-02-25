@@ -51,7 +51,14 @@ class AimdHost:
     def shutdown_hook(self):
         #  Save the window sizes over time so that, when the simulation finishes, we can plot them over time.
         #  Then, pass those values in here
-        self.plot(self.window_sizes) 
+        self.plot(self.window_sizes)
+        # also dump raw values to CSV for analysis
+        try:
+            with open("aimd-window-sizes.csv", "w") as f:
+                for i, v in enumerate(self.window_sizes):
+                    f.write(f"{i},{v}\n")
+        except Exception:
+            pass
 
     def advance_sequence_number(self) -> int:
         if self.last_transmitted_sequence_number is None:
@@ -79,7 +86,20 @@ class AimdHost:
             self.sliding_window.remove_inflight_information(packet.sequence_number)
 
             # Update the window size
-            new_window = 0 # TODO: Calculate the correct value for new_window
+            old_window = self.sliding_window.get_window_size()
+            # update RTT estimator
+            try:
+                rtt = current_time - packet.sent_timestamp
+                self.timeout_calculator.add_data_point(rtt)
+            except Exception:
+                pass
+
+            if self.slow_start:
+                # slow start: increase by 1 for each ACK (approx. doubling per RTT)
+                new_window = old_window + 1.0
+            else:
+                # congestion avoidance: additive increase ~ +1 per RTT -> +1/window per ACK
+                new_window = old_window + (1.0 / max(1.0, old_window))
             # Hint: if it is in slow start mode, how should we update the window size?
             # If is in congestion avoidance mode, how should we update the window size?
             # Note that window size update is triggered by every acked packet, but in class we descibe
@@ -104,8 +124,22 @@ class AimdHost:
 
         retriable_packets = self.sliding_window.get_packets_to_retry()
         for retriable_message in retriable_packets:
+            # On timeout, exit slow start and multiplicative decrease (at most once per RTT)
             self.slow_start = False
-            pass 
+            old_window = self.sliding_window.get_window_size()
+            if self.last_multiplicative_decrease < current_time:
+                # multiplicative decrease by factor of 0.5
+                new_w = max(1.0, old_window * 0.5)
+                self.set_window_size(new_w, old_window)
+                self.last_multiplicative_decrease = current_time
+
+            seq = retriable_message.sequence_number
+            # retransmit packet
+            retransmit_pkt = Packet(sent_timestamp=current_time, sequence_number=seq, retransmission_flag=True)
+            self.network_interface.transmit(retransmit_pkt)
+            # refresh inflight info
+            self.sliding_window.remove_inflight_information(seq)
+            self.sliding_window.add_inflight_information(seq, current_time + self.timeout_calculator.timeout())
 
         # TODO: STEP 3 - Transmit new messages
         #  - When you transmit each packet (in steps 2 and 3), you should track that message as inflight
@@ -116,7 +150,11 @@ class AimdHost:
         #      - Use the transmit() function of the network interface to send the packet
         # REPLACE pass with your code
         for i in range(0, self.sliding_window.compute_number_of_packets_to_send()):
-            pass 
+            seq = self.advance_sequence_number()
+            pkt = Packet(sent_timestamp=current_time, sequence_number=seq, retransmission_flag=False)
+            self.network_interface.transmit(pkt)
+            timeout = current_time + self.timeout_calculator.timeout()
+            self.sliding_window.add_inflight_information(seq, timeout)
 
         # STEP 4 - Return
         #  - Return the largest in-order sequence number
