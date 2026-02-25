@@ -115,7 +115,7 @@ def run_simulation(network_simulator, alpha: float, beta: float, k: float) -> li
     return message_transmissions
 
 
-def plot(message_transmissions: list):
+def plot(message_transmissions: list, alpha: float, beta: float, k: float, scenario: str):
     # First, extract the two data sets
     actual_rtt_data = list(map(lambda message: message.packet_rtt, message_transmissions))
     mean_estimates = list(map(lambda message: message.transmission_rtt_mean_estimate, message_transmissions))
@@ -126,7 +126,15 @@ def plot(message_transmissions: list):
     plt.plot(mean_estimates, label="Mean Estimate", color="blue", ls="dotted")
     plt.plot(timeouts, label="Timeout", color="green", ls="dotted")
     plt.legend()
-    plt.savefig("timeout_simulation.png")
+    title = f"Scenario: {scenario}  a={alpha}  b={beta}  k={k}"
+    plt.title(title)
+    plt.xlabel("Message index")
+    # create a filename that encodes params (dots replaced with 'p' to be filesystem friendly)
+    def safe(x):
+        return str(x).replace('.', 'p')
+
+    filename = f"timeout_simulation_{scenario}_a{safe(alpha)}_b{safe(beta)}_k{safe(k)}.png"
+    plt.savefig(filename)
 
 
 if __name__ == "__main__":
@@ -177,4 +185,4 @@ if __name__ == "__main__":
     print(f"EWMA at step 35: {message_transmissions[35].transmission_rtt_mean_estimate}")
     print(f"EWMA at step 90: {message_transmissions[90].transmission_rtt_mean_estimate}")
     print()
-    plot(message_transmissions)
+    plot(message_transmissions, args.alpha, args.beta, args.k, args.simulation_scenario)
