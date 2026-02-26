@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.png
 *.csv
+*.zip
 
 # macOS
 .DS_Store
